@@ -1,4 +1,4 @@
-FROM ghcr.io/mattblack85/astrobase:0.1.0 AS builder
+FROM ghcr.io/mattblack85/astrobase:v0.1.0 AS builder
 
 RUN pacman -Syu --noconfirm
 
