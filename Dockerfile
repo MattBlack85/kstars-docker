@@ -1,15 +1,6 @@
-FROM archlinux:latest AS builder
+FROM ghcr.io/mattblack85/astrobase:0.1.0 AS builder
 
 RUN pacman -Syu --noconfirm
-
-# These are all the packages needed to build kstars, indi, indi-3rdparty and GSC
-RUN pacman -S git base-devel cmake cfitsio fftw gsl \
-    libjpeg-turbo libnova libtheora libusb boost \
-    libraw libgphoto2 libftdi libdc1394 libavc1394 \
-    ffmpeg gpsd breeze-icons hicolor-icon-theme knewstuff \
-    knotifyconfig kplotting qt5-datavis3d qt5-quickcontrols \
-    qt5-websockets qtkeychain stellarsolver \
-    extra-cmake-modules kf5 eigen --noconfirm
 
 # Set the global versions to checkout from git to build
 ENV INDI_VERSION=v1.9.3
@@ -18,8 +9,7 @@ ENV KSTARS_VERSION=stable-3.5.6
 # Make a bag where all the compile executable will be stored
 RUN mkdir /tmp/final
 
-# Make a folder where Kstars, indi and GSC will be built
-RUN mkdir /tmp/build
+# Move to build  where Kstars, indi and GSC will be built
 WORKDIR /tmp/build
 
 # Clone the source code
@@ -45,18 +35,6 @@ WORKDIR /tmp/build/indi-extra
 RUN cmake -DCMAKE_INSTALL_PREFIX=/tmp/final -DCMAKE_BUILD_TYPE=Debug /tmp/build/indi-3rdparty
 RUN make -j $(nproc)
 RUN make install
-
-# Build GSC
-WORKDIR /tmp/build
-RUN git clone https://aur.archlinux.org/gsc.git
-WORKDIR /tmp/build/gsc
-RUN useradd --no-create-home --shell=/bin/false build && usermod -L build
-RUN echo "build ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-RUN echo "root ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-RUN chown  build:build /tmp/build/gsc
-USER build
-RUN makepkg
-RUN ls -lsa .
 
 USER root
 RUN mkdir -p /tmp/build/kstars
@@ -93,10 +71,19 @@ COPY --from=builder /tmp/final/include/ /usr/include
 COPY --from=builder /tmp/build/gsc/pkg/gsc/usr/share/GSC/ /usr/share/
 COPY --from=builder /tmp/build/gsc/pkg/gsc/usr/share/GSC/bin/ /usr/bin/
 COPY --from=builder /tmp/build/gsc/gsc-1.2-4-x86_64.pkg.tar.zst /tmp/
+COPY --from=builder /etc/astrometry.cfg .
+COPY --from=builder /tmp/build/astrometry.net/astrometry*.zst /tmp/
+COPY --from=builder /tmp/build/python-astropy/python-astropy*.zst /tmp/
+COPY --from=builder /tmp/build/python-pyerfa/python-pyerfa*.zst /tmp/
+COPY --from=builder /tmp/build/erfa/erfa*.zst /tmp/
 
 USER root
 RUN pacman -U /tmp/gsc-1.2-4-x86_64.pkg.tar.zst --noconfirm
-RUN rm /tmp/gsc-1.2-4-x86_64.pkg.tar.zst
+RUN pacman -U /tmp/erfa*.zst --noconfirm
+RUN pacman -U /tmp/python-pyerfa*.zst --noconfirm
+RUN pacman -U /tmp/python-astropy*.zst --noconfirm
+RUN pacman -U /tmp/astrometry.net-0.85-1-x86_64.pkg.tar.zst --noconfirm
+RUN rm /tmp/*.zst
 USER astro
 
 CMD ["/usr/bin/kstars"]
